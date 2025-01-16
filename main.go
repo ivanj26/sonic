@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 
+	"ivanj26/sonic/constant"
 	redis_lib "ivanj26/sonic/lib"
 	"ivanj26/sonic/util"
 	"ivanj26/sonic/util/logger"
@@ -28,10 +29,16 @@ func main() {
 	var maxConcurrent int
 	flag.IntVar(&maxConcurrent, "p", 5, "Number of parallel slot migration (equivalent to number of go routine)")
 
+	var logFilePath string
+	flag.StringVar(&logFilePath, "log-path", constant.DEFAULT_LOG_FILENAME, "Path to log file")
+
+	var enableInfoLog bool
+	flag.BoolVar(&enableInfoLog, "enable-info-log", true, "To disable info log, set as false")
+
 	flag.Parse()
 
 	// Initialize the logger
-	err := logger.Initialize("sonic.log")
+	err := logger.Initialize(logFilePath, enableInfoLog)
 	if err != nil {
 		log.Fatalf("Failed to initialize logger: %v", err)
 	}

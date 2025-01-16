@@ -1,4 +1,4 @@
 sonic
 main
 vendor
-sonic.log
+*.log

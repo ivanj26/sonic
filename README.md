@@ -25,7 +25,7 @@ Sonic is a high-performance tool designed for seamless slot migration in Redis c
 2. Run the application by using the following command and options:
 
     ```bash
-    ./sonic -s <source_ip_without_port> -d <dest_ip_without_port> -a <password>> -n <slots>           
+    ./sonic -s <source_ip_without_port> -d <dest_ip_without_port> -a <password> -n <slots>           
     ```
 
 ## Usage
@@ -39,5 +39,7 @@ Sonic provides an intuitive interface to manage slot migrations.
 | `-s`       | Address of the source Redis node without port, default port is 6379. Should be a master node.             | N/A              | 10.21.123.12
 | `-d`  | Address of the destination Redis node without port, default ort is 6379. Should be a master node.       | N/A              | 10.21.123.13
 | `-n`        | Comma-separated list of slots to migrate.     | N/A              | 1365,1380 or 1365 (single slot)
+| `-enable-info-log`  | To disable info log, set as false.       | N/A              | true
+| `-log-path`  | Path to log file.       | N/A              | sonic.log
 | `-a`        | Redis password.     | N/A              |
 | `-p`     | Number of parallel migrations to execute. By default: 5 at max concurrent     | `5`              | 5

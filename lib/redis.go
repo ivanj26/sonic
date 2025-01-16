@@ -178,7 +178,7 @@ func (r *Redis) processReshard(slot string, destCli IRedis) error {
 	// Migrate keys still in serial manner
 	keysBatch, errs := []string{}, []error{}
 	for {
-		keys := r.GetKeysInSlot(slot, constant.KEYS_COUNT)
+		keys := r.GetKeysInSlot(slot, constant.DEFAULT_KEYS_COUNT)
 		if len(keys) == 0 {
 			break
 		}
@@ -187,7 +187,7 @@ func (r *Redis) processReshard(slot string, destCli IRedis) error {
 			keysBatch = append(keysBatch, key)
 
 			// Once we accumulate a full batch, migrate the keys
-			if len(keysBatch) == constant.MAX_MIGRATE_KEY_COUNT {
+			if len(keysBatch) == constant.DEFAULT_MAX_MIGRATE_KEY_COUNT {
 				err = r.migrateKey(destHost, destPort, slot, keysBatch)
 				if err != nil {
 					errs = append(errs, err)
@@ -261,7 +261,7 @@ func (r *Redis) migrateKey(destHost, destPort, slot string, keys []string) error
 		cmd = append(cmd, key)
 	}
 
-	for attempt := 1; attempt <= constant.MAX_RETRY_MIGRATE_KEY; attempt++ {
+	for attempt := 1; attempt <= constant.DEFAULT_MAX_RETRY_MIGRATE_KEY; attempt++ {
 		statusCmd := r.cli.Do(context.Background(), cmd...)
 		res, err := statusCmd.Result()
 
