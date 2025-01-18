@@ -1,4 +1,4 @@
-package lib
+package redis
 
 import (
 	"ivanj26/sonic/constant/state"
@@ -9,8 +9,10 @@ import (
 type IRedis interface {
 	Close() error
 	GetClusterMyId() (string, error)
+	GetClusterSlots() (*ClusterSlotResult, error)
 	GetAddr() string
 	GetKeysInSlot(slot string, limitCount int) []string
+	IsMaster() bool
 	SetSlot(slot string, state state.State, nodeId string) error
 	Reshard(slot []string, destCli IRedis, maxConcurrent int) error
 }

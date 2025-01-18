@@ -1,4 +1,6 @@
 sonic
+sonic-linux-amd64
+sonic-*.exe
 main
 vendor
 *.log

@@ -1,4 +1,4 @@
-package lib
+package redis
 
 import (
 	"context"
@@ -7,14 +7,15 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"ivanj26/sonic/constant"
 	"ivanj26/sonic/constant/command"
 	"ivanj26/sonic/constant/state"
-	"ivanj26/sonic/util"
 	"ivanj26/sonic/util/logger"
+	"ivanj26/sonic/util/parser"
 
 	"github.com/go-redis/redis/v8"
 )
@@ -49,8 +50,60 @@ func (r *Redis) GetClusterMyId() (string, error) {
 	return idStr, nil
 }
 
+func (r *Redis) GetClusterSlots() (*ClusterSlotResult, error) {
+	res, err := r.cli.Do(context.Background(), command.CLUSTER_SLOTS...).Result()
+	if err != nil {
+		logger.Errorf("Failed to get `cluster slots` on node ip: %s. Err=%s", r.GetAddr(), err)
+		return nil, err
+	}
+
+	resT, ok := res.([]interface{})
+	if !ok {
+		logger.Errorf("Failed to parse `cluster slots` result on node ip: %s", r.GetAddr())
+		return nil, err
+	}
+
+	allSlots, filteredSlots := (*ClusterSlotResult)(&resT), make([]interface{}, 0)
+	myIp := strings.Split(r.GetAddr(), ":")[0]
+	if allSlots != nil {
+		for _, u := range *allSlots {
+			nestedU := u.([]interface{})
+			if len(nestedU) >= 2 {
+				ipInfo := nestedU[2].([]interface{})
+				if len(ipInfo) > 0 && ipInfo[0] == myIp {
+					filteredSlots = append(filteredSlots, nestedU)
+				}
+			}
+		}
+
+		return (*ClusterSlotResult)(&filteredSlots), nil
+	}
+
+	return nil, fmt.Errorf("Failed to get `cluster slots` on node ip:%s", r.GetAddr())
+}
+
 func (r *Redis) GetAddr() string {
 	return r.cli.Options().Addr
+}
+
+func (r *Redis) IsMaster() bool {
+	res, err := r.cli.Do(context.Background(), command.ROLE).Result()
+	if err != nil {
+		logger.Errorf("Failed to get 'role' from node %s. Err=%s", r.GetAddr(), err)
+		return false
+	}
+
+	resStr, ok := res.([]interface{})
+	if !ok {
+		logger.Errorf("Failed to get 'role' from node %s. Reason= result cannot be parsed to []interface{}", r.GetAddr())
+		return false
+	}
+
+	if len(resStr) > 0 {
+		return resStr[0].(string) == "master"
+	}
+
+	return false
 }
 
 func (r *Redis) SetSlot(slot string, state state.State, nodeId string) error {
@@ -95,9 +148,13 @@ func (r *Redis) GetKeysInSlot(slot string, limitCount int) []string {
 }
 
 func (r *Redis) Reshard(slots []string, destCli IRedis, maxConcurrent int) error {
+	if !r.IsMaster() || !destCli.IsMaster() {
+		return errors.New("Reshard failed, the both nodes should be master")
+	}
+
 	if len(slots) > 1 {
-		slotStartInt := util.ParseInt(slots[0])
-		slotEndInt := util.ParseInt(slots[1])
+		slotStartInt := parser.ParseInt(slots[0])
+		slotEndInt := parser.ParseInt(slots[1])
 
 		// Default max goroutine: 5
 		// In other word, Migrate n slots (default: 5) at a time
@@ -215,6 +272,8 @@ func (r *Redis) processReshard(slot string, destCli IRedis) error {
 
 		// Revert the slot state
 		for {
+			logger.Infof("Reshard failed. Reverting slot %s ownership to source node: %s", slot, r.GetAddr())
+
 			err, err2 := r.SetSlot(slot, state.NODE, sourceId), destCli.SetSlot(slot, state.NODE, sourceId)
 			if err != nil || err2 != nil {
 				time.Sleep(2 * time.Second)

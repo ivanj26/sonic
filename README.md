@@ -38,7 +38,8 @@ Sonic provides an intuitive interface to manage slot migrations.
 |------------------|-----------------------------------------------|------------------|------------------
 | `-s`       | Address of the source Redis node without port, default port is 6379. Should be a master node.             | N/A              | 10.21.123.12
 | `-d`  | Address of the destination Redis node without port, default ort is 6379. Should be a master node.       | N/A              | 10.21.123.13
-| `-n`        | Comma-separated list of slots to migrate.     | N/A              | 1365,1380 or 1365 (single slot)
+| `-l`        | Range of slot or Exact slot. Comma-separated list of slots to migrate.     | N/A              | 1365,1380 or 1365 (single slot)
+| `-n`        | Number of slots if you do not want to use -l flag.     | N/A              | 10
 | `-enable-info-log`  | To disable info log, set as false.       | N/A              | true
 | `-log-path`  | Path to log file.       | N/A              | sonic.log
 | `-a`        | Redis password.     | N/A              |

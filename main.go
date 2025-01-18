@@ -6,9 +6,10 @@ import (
 	"log"
 
 	"ivanj26/sonic/constant"
-	redis_lib "ivanj26/sonic/lib"
+	redisCli "ivanj26/sonic/lib/redis"
 	"ivanj26/sonic/util"
 	"ivanj26/sonic/util/logger"
+	"ivanj26/sonic/util/parser"
 
 	"github.com/go-redis/redis/v8"
 )
@@ -24,7 +25,10 @@ func main() {
 	flag.StringVar(&password, "a", "", "Redis password")
 
 	var slotRaw string
-	flag.StringVar(&slotRaw, "n", "", "Slots. Could be range 6500,6600 or single slot 6600")
+	flag.StringVar(&slotRaw, "l", "", "Slots. Could be range 6500,6600 or single slot 6600")
+
+	var nbOfSlot int
+	flag.IntVar(&nbOfSlot, "n", 0, "Number of slots. Must be positive integer >0.")
 
 	var maxConcurrent int
 	flag.IntVar(&maxConcurrent, "p", 5, "Number of parallel slot migration (equivalent to number of go routine)")
@@ -38,38 +42,66 @@ func main() {
 	flag.Parse()
 
 	// Initialize the logger
-	err := logger.Initialize(logFilePath, enableInfoLog)
+	err := logger.New().
+		SetFilePath(logFilePath).
+		SetInfoEnabled(enableInfoLog).
+		Initialize()
+
 	if err != nil {
 		log.Fatalf("Failed to initialize logger: %v", err)
 	}
 
 	if util.IsEmpty(sourceIp) ||
 		util.IsEmpty(destIp) ||
-		util.IsEmpty(password) ||
-		util.IsEmpty(slotRaw) {
+		util.IsEmpty(password) {
 		logger.Fatal("Please fill the arguments to execute the reshard")
 	}
 
-	// Parse raw slots from user input
-	slots := util.ParseSlot(slotRaw)
-
 	// Init source redis client
-	sourceCli := redis_lib.NewRedisClient(&redis.Options{
+	sourceCli := redisCli.NewRedisClient(&redis.Options{
 		Addr:     fmt.Sprintf("%s:6379", sourceIp),
 		Password: password,
 	})
 	defer sourceCli.Close()
 
+	var totalSlotsRange [][]string
+	if util.IsEmpty(slotRaw) {
+		if nbOfSlot <= 0 {
+			logger.Fatal("Please fill the range of slot or number of slots to migrate!")
+		}
+
+		slots, err := sourceCli.GetClusterSlots()
+		if slots == nil || err != nil {
+			logger.Fatal(err.Error())
+		}
+
+		totalSlotsRange = slots.LimitTo(nbOfSlot)
+	} else {
+		// Parse raw slots from user input
+		totalSlotsRange = append(totalSlotsRange, parser.ParseSlot(slotRaw))
+	}
+
 	// Init destination redis client
-	destCli := redis_lib.NewRedisClient(&redis.Options{
+	destCli := redisCli.NewRedisClient(&redis.Options{
 		Addr:     fmt.Sprintf("%s:6379", destIp),
 		Password: password,
 	})
 	defer destCli.Close()
 
 	// Perform resharding
-	err = sourceCli.Reshard(slots, destCli, maxConcurrent)
-	if err != nil {
-		logger.Fatalf("Error when performing reshard operation. Err=%s", err)
+	for _, slotRange := range totalSlotsRange {
+		if len(slotRange) < 2 {
+			logger.Errorf("Invalid slot range. Slots: %+v", slotRange)
+			continue
+		}
+
+		logger.Infof("-----------------------------------------------------------------")
+		logger.Infof("Migrating slots [%s, %s] from %s to %s...", slotRange[0], slotRange[1], sourceIp, destIp)
+		logger.Infof("-----------------------------------------------------------------")
+
+		err := sourceCli.Reshard(slotRange, destCli, maxConcurrent)
+		if err != nil {
+			logger.Fatalf("Error when performing reshard operation on slot range %v. Err=%s", slotRange, err)
+		}
 	}
 }
